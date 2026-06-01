@@ -52,12 +52,12 @@ Get key: https://finnhub.io/
 ### 2. Create ticker list
 tickers.txt
 
-`Example:<br>
+Example:<br>
 AAPL<br>
 MSFT<br>
 GOOGL<br>
 TSLA<br>
-AMZN<br>`
+AMZN<br>
 
 ---
 
