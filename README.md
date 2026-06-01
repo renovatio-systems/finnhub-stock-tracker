@@ -52,18 +52,18 @@ Get key: https://finnhub.io/
 ### 2. Create ticker list
 tickers.txt
 
-Example:
+`Example:
 AAPL
 MSFT
 GOOGL
 TSLA
-AMZN
+AMZN`
 
 ---
 
 ## Build
 
-gcc -o stock_monitor main.c -lcurl -lcjson
+gcc -o stock_monitor monitor.c -lcurl -lcjson
 
 ---
 
