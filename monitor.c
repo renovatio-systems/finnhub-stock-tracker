@@ -17,8 +17,12 @@ struct Memory {
 typedef struct {
     char name[256];
     char ticker[32];
-    char currency[16];
     double price;
+
+    double cost;
+    int shares;
+    double gain;
+
     int valid;
 } StockInfo;
 
@@ -52,9 +56,7 @@ static char *read_api_key(const char *filename) {
     fclose(fp);
     trim(buffer);
 
-    if (strlen(buffer) == 0) {
-        return NULL;
-    }
+    if (strlen(buffer) == 0) return NULL;
 
     char *key = malloc(strlen(buffer) + 1);
     if (!key) return NULL;
@@ -108,15 +110,7 @@ static int http_get(const char *url, char **response) {
 
     curl_easy_cleanup(curl);
 
-    if (res != CURLE_OK) {
-        fprintf(stderr, "curl error: %s\n", curl_easy_strerror(res));
-        free(chunk.data);
-        return 0;
-    }
-
-    if (http_code != 200) {
-        fprintf(stderr, "HTTP error: %ld\n", http_code);
-        fprintf(stderr, "Response: %s\n", chunk.data);
+    if (res != CURLE_OK || http_code != 200) {
         free(chunk.data);
         return 0;
     }
@@ -129,13 +123,9 @@ static int get_company_profile(const char *symbol, const char *api_key, StockInf
     char url[1024];
     char *response = NULL;
 
-    snprintf(
-        url,
-        sizeof(url),
-        BASE_URL "/stock/profile2?symbol=%s&token=%s",
-        symbol,
-        api_key
-    );
+    snprintf(url, sizeof(url),
+             BASE_URL "/stock/profile2?symbol=%s&token=%s",
+             symbol, api_key);
 
     if (!http_get(url, &response)) return 0;
 
@@ -145,17 +135,8 @@ static int get_company_profile(const char *symbol, const char *api_key, StockInf
     if (!json) return 0;
 
     cJSON *name = cJSON_GetObjectItem(json, "name");
-    cJSON *ticker = cJSON_GetObjectItem(json, "ticker");
-    cJSON *currency = cJSON_GetObjectItem(json, "currency");
-
     snprintf(info->name, sizeof(info->name), "%s",
              cJSON_IsString(name) ? name->valuestring : "Unknown");
-
-    snprintf(info->ticker, sizeof(info->ticker), "%s",
-             cJSON_IsString(ticker) ? ticker->valuestring : symbol);
-
-    snprintf(info->currency, sizeof(info->currency), "%s",
-             cJSON_IsString(currency) ? currency->valuestring : "Unknown");
 
     cJSON_Delete(json);
     return 1;
@@ -165,13 +146,9 @@ static int get_quote(const char *symbol, const char *api_key, StockInfo *info) {
     char url[1024];
     char *response = NULL;
 
-    snprintf(
-        url,
-        sizeof(url),
-        BASE_URL "/quote?symbol=%s&token=%s",
-        symbol,
-        api_key
-    );
+    snprintf(url, sizeof(url),
+             BASE_URL "/quote?symbol=%s&token=%s",
+             symbol, api_key);
 
     if (!http_get(url, &response)) return 0;
 
@@ -195,17 +172,19 @@ static int get_quote(const char *symbol, const char *api_key, StockInfo *info) {
 }
 
 static void print_header(void) {
-    printf("%-35s %-10s %-12s %-10s\n",
-           "Company", "Ticker", "Price", "Currency");
-    printf("---------------------------------------------------------------------\n");
+    printf("%-35s %10s %10s %10s %12s\n",
+           "Company", "Cost", "Shares", "Price", "Gain");
+
+    printf("----------------------------------------------------------------------------------------\n");
 }
 
 static void print_stock(const StockInfo *info) {
-    printf("%-35.35s %-10s %-12.2f %-10s\n",
+    printf("%-35.35s %10.2f %10d %10.2f %12.2f\n",
            info->name,
-           info->ticker,
+           info->cost,
+           info->shares,
            info->price,
-           info->currency);
+           info->gain);
 }
 
 int main(int argc, char *argv[]) {
@@ -218,7 +197,7 @@ int main(int argc, char *argv[]) {
 
     char *api_key = read_api_key(api_file);
     if (!api_key) {
-        fprintf(stderr, "Could not read API key from %s\n", api_file);
+        fprintf(stderr, "Could not read API key\n");
         return 1;
     }
 
@@ -238,28 +217,37 @@ int main(int argc, char *argv[]) {
     while (fgets(line, sizeof(line), fp)) {
         trim(line);
 
-        if (line[0] == '\0' || line[0] == '#') {
+        if (line[0] == '\0' || line[0] == '#')
             continue;
-        }
 
         StockInfo info;
         memset(&info, 0, sizeof(info));
 
-        snprintf(info.name, sizeof(info.name), "Unknown");
-        snprintf(info.ticker, sizeof(info.ticker), "%s", line);
-        snprintf(info.currency, sizeof(info.currency), "Unknown");
+        char *token = strtok(line, ",");
+        if (!token) continue;
+        trim(token);
+        snprintf(info.ticker, sizeof(info.ticker), "%s", token);
 
-        if (!get_company_profile(line, api_key, &info)) {
-            fprintf(stderr, "Failed to get company profile for %s\n", line);
+        token = strtok(NULL, ",");
+        if (!token) continue;
+        info.cost = atof(token);
+
+        token = strtok(NULL, ",");
+        if (!token) continue;
+        info.shares = atoi(token);
+
+        if (!get_company_profile(info.ticker, api_key, &info)) {
+            snprintf(info.name, sizeof(info.name), "%s", info.ticker);
         }
 
-        if (!get_quote(line, api_key, &info)) {
-            fprintf(stderr, "Failed to get quote for %s\n", line);
+        if (!get_quote(info.ticker, api_key, &info)) {
+            fprintf(stderr, "Failed quote for %s\n", info.ticker);
             continue;
         }
 
-        print_stock(&info);
+        info.gain = (info.price - info.cost) * info.shares;
 
+        print_stock(&info);
     }
 
     fclose(fp);
