@@ -88,8 +88,8 @@ or
 
 ## API Endpoints
 
-/profile2
-/quote
+/profile2<br>
+/quote<br>
 
 ---
 
