@@ -18,10 +18,9 @@ It reads a list of stock tickers from a file, retrieves company profile data and
 
 ## Example Output
 
-Company                             Ticker     Price        Currency
----------------------------------------------------------------------
-Apple Inc                           AAPL       189.34       USD
-Microsoft Corporation               MSFT       415.12       USD
+Company                             Ticker     Price        Currency<br>
+Apple Inc                           AAPL       189.34       USD<br>
+Microsoft Corporation               MSFT       415.12       USD<br>
 
 ---
 
