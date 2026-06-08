@@ -17,8 +17,8 @@ struct Memory {
 typedef struct {
     char name[256];
     char ticker[32];
-    double price;
 
+    double price;
     double cost;
     int shares;
     double gain;
@@ -135,8 +135,9 @@ static int get_company_profile(const char *symbol, const char *api_key, StockInf
     if (!json) return 0;
 
     cJSON *name = cJSON_GetObjectItem(json, "name");
+
     snprintf(info->name, sizeof(info->name), "%s",
-             cJSON_IsString(name) ? name->valuestring : "Unknown");
+             cJSON_IsString(name) ? name->valuestring : symbol);
 
     cJSON_Delete(json);
     return 1;
@@ -175,7 +176,7 @@ static void print_header(void) {
     printf("%-35s %10s %10s %10s %12s\n",
            "Company", "Cost", "Shares", "Price", "Gain");
 
-    printf("----------------------------------------------------------------------------------------\n");
+    printf("----------------------------------------------------------------------------------\n");
 }
 
 static void print_stock(const StockInfo *info) {
@@ -211,6 +212,7 @@ int main(int argc, char *argv[]) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     char line[MAX_LINE];
+    double total_gain = 0.0;
 
     print_header();
 
@@ -246,9 +248,14 @@ int main(int argc, char *argv[]) {
         }
 
         info.gain = (info.price - info.cost) * info.shares;
+        total_gain += info.gain;
 
         print_stock(&info);
     }
+
+    printf("----------------------------------------------------------------------------------\n");
+    printf("%-35s %10s %10s %10s %12.2f\n",
+           "TOTAL", "", "", "", total_gain);
 
     fclose(fp);
     free(api_key);
