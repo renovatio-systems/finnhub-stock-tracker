@@ -27,12 +27,13 @@ Microsoft Corporation               MSFT       415.12       USD<br>
 ## Requirements
 
 - GCC or any C compiler
-- libcurl
-- cJSON
+- CMake and Make
+- OpenSSL development headers (used as curl's TLS backend)
+- libcurl and cJSON — vendored as git submodules under `third_party/` and built from source, so no system install of either is needed
 
 ### Ubuntu/Debian install:
 sudo apt update
-sudo apt install libcurl4-openssl-dev libcjson-dev build-essential
+sudo apt install build-essential cmake libssl-dev
 
 ---
 
@@ -62,17 +63,30 @@ AMZN<br>
 
 ## Build
 
-gcc -o stock_monitor monitor.c -lcurl -lcjson
+### 1. Fetch the vendored dependencies (first time only)
+git submodule update --init --recursive
+
+### 2. Configure and build
+cmake -S . -B build
+cmake --build build -j"$(nproc)"
+
+This builds `libcurl` and `cJSON` as static libraries from the vendored
+submodules (curl is trimmed to OpenSSL/HTTP(S) only — no brotli, zstd,
+nghttp2, or libssh2) and links them into `build/stock_monitor`.
 
 ---
 
 ## Run
 
-./stock_monitor
+`tickers.txt` is copied into `build/` automatically by CMake. Copy your
+`api.txt` (see Setup above) into `build/` as well, since it holds a secret
+and is intentionally not tracked or copied by the build:
+
+./build/stock_monitor
 
 or
 
-./stock_monitor my_tickers.txt
+./build/stock_monitor my_tickers.txt
 
 ---
 
