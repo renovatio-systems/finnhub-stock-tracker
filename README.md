@@ -8,8 +8,10 @@ It reads a list of stock tickers from a file, retrieves company profile data and
 ## Features
 
 - Fetches real-time stock prices
+- Shows daily price change and percent change, colored green/red on a terminal
 - Retrieves company profile information (name, ticker, currency)
 - Reads tickers from a file (`tickers.txt` by default)
+- Optional watch mode (`--watch <seconds>`) that auto-refreshes the table
 - Simple and clean terminal output
 - Uses `libcurl` for HTTP requests
 - Uses `cJSON` for JSON parsing
@@ -18,9 +20,9 @@ It reads a list of stock tickers from a file, retrieves company profile data and
 
 ## Example Output
 
-Company                             Ticker     Price        Currency<br>
-Apple Inc                           AAPL       189.34       USD<br>
-Microsoft Corporation               MSFT       415.12       USD<br>
+Company                             Ticker     Price        Change               Currency<br>
+Apple Inc                           AAPL       189.34       +1.23 (+0.65%)       USD<br>
+Microsoft Corporation               MSFT       415.12       -2.04 (-0.49%)       USD<br>
 
 ---
 
@@ -88,15 +90,23 @@ or
 
 ./build/stock_monitor my_tickers.txt
 
+To auto-refresh on an interval instead of running once, add `-w`/`--watch`
+with a number of seconds:
+
+./build/stock_monitor --watch 30
+
+./build/stock_monitor my_tickers.txt --watch 30
+
 ---
 
 ## How it works
 
 1. Reads API key from file
 2. Reads ticker symbols
-3. Fetches company profile + quote from Finnhub
+3. Fetches company profile + quote (price, daily change, percent change) from Finnhub
 4. Parses JSON using cJSON
-5. Prints formatted table
+5. Prints formatted table, colored by gain/loss when connected to a terminal
+6. If `--watch <seconds>` is given, repeats steps 3-5 on that interval until interrupted
 
 ---
 
