@@ -11,7 +11,10 @@ It reads a list of stock tickers from a file, retrieves company profile data and
 - Shows daily price change and percent change (colored green/red for the day's move)
 - Tracks your cost basis: shows purchase price and total gain/loss versus what you paid,
   colored green when the current price is above your purchase price and red when below
-- Retrieves company profile information (name, ticker, currency)
+- Retrieves company profile information (name, currency). The Ticker column always shows
+  the symbol from your tickers file; the profile currency is used only when the profile's
+  ticker matches that symbol (dual-listed companies like `TSM` return another listing's
+  profile), otherwise suffix-less US symbols show `USD` and others show `?`
 - Reads tickers, purchase price, and share count from a file (`tickers.txt` by default)
 - Optional watch mode (`--watch <seconds>`) that auto-refreshes the table
 - Fetches all tickers concurrently via libcurl's multi interface
@@ -60,8 +63,17 @@ Get key: https://finnhub.io/
 ### 2. Create ticker list
 tickers.txt
 
-Each line is `TICKER,PURCHASE_PRICE,SHARES`. Lines starting with `#` and
+Each line is `TICKER,PURCHASE_PRICE,SHARES[,PURCHASE_CCY]`. Lines starting with `#` and
 blank lines are ignored; malformed lines are skipped with a warning.
+
+`PURCHASE_CCY` is optional: the currency the purchase price was paid in (normally your
+account currency). If omitted, the purchase price is assumed to be in the quote currency,
+so 3-field files keep working. If it is given and differs from the quote currency (or the
+quote currency is `?`), Gain/Loss is shown as `? (CCY)` instead of a number, because
+currency conversion is not available (see Limitations).
+
+When tracking an ADR symbol (e.g. `TSM`), enter the purchase price per ADR, as quoted on
+the US exchange. ADR ratios are not converted.
 
 Example:<br>
 AAPL,150.00,10<br>
@@ -126,6 +138,17 @@ with a number of seconds:
 
 /profile2<br>
 /quote<br>
+
+---
+
+## Limitations
+
+- No currency conversion. Every Finnhub forex rate source (`/forex/rates`, `/quote` on
+  `OANDA:`/`FXCM:`/`FHFX:` pairs, `/forex/candle`) returns 403 on the free tier, so there is
+  no base-currency option and gain/loss is never converted.
+- Non-US listings (e.g. `VOD.L`) return 403 for both `/quote` and `/stock/profile2` on the
+  free tier and are left out of the table. For the same reason it was not possible to check
+  whether London prices come back in GBX (pence) or GBP, so no GBX normalisation is done.
 
 ---
 

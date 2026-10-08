@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
 #include <unistd.h>
 #include <time.h>
@@ -30,6 +31,7 @@ typedef struct {
     double percent_change;
     double purchase_price;
     double shares;
+    char purchase_ccy[16];
     int valid;
 } StockInfo;
 
@@ -37,6 +39,7 @@ typedef struct {
     char symbol[32];
     double purchase_price;
     double shares;
+    char purchase_ccy[16];
 } TickerEntry;
 
 typedef struct {
@@ -75,6 +78,7 @@ static int parse_ticker_line(char *line, TickerEntry *entry) {
     char *symbol = strtok(line, ",");
     char *purchase_price = strtok(NULL, ",");
     char *shares = strtok(NULL, ",");
+    char *purchase_ccy = strtok(NULL, ",");
 
     if (!symbol || !purchase_price || !shares) {
         return 0;
@@ -87,6 +91,13 @@ static int parse_ticker_line(char *line, TickerEntry *entry) {
     snprintf(entry->symbol, sizeof(entry->symbol), "%s", symbol);
     entry->purchase_price = atof(purchase_price);
     entry->shares = atof(shares);
+
+    /* Optional; empty means the purchase price is in the quote currency. */
+    entry->purchase_ccy[0] = '\0';
+    if (purchase_ccy) {
+        trim(purchase_ccy);
+        snprintf(entry->purchase_ccy, sizeof(entry->purchase_ccy), "%s", purchase_ccy);
+    }
 
     return 1;
 }
@@ -112,7 +123,7 @@ static int load_tickers(const char *filename, TickerList *list) {
         TickerEntry entry;
         if (!parse_ticker_line(line, &entry)) {
             fprintf(stderr,
-                    "Skipping malformed line %d in %s (expected TICKER,PURCHASE_PRICE,SHARES): %s\n",
+                    "Skipping malformed line %d in %s (expected TICKER,PURCHASE_PRICE,SHARES[,PURCHASE_CCY]): %s\n",
                     line_no, filename, line);
             continue;
         }
@@ -184,11 +195,17 @@ static void parse_profile_response(const char *json_str, const char *symbol, Sto
     snprintf(info->name, sizeof(info->name), "%s",
              cJSON_IsString(name) ? name->valuestring : "Unknown");
 
-    snprintf(info->ticker, sizeof(info->ticker), "%s",
-             cJSON_IsString(ticker) ? ticker->valuestring : symbol);
-
-    snprintf(info->currency, sizeof(info->currency), "%s",
-             cJSON_IsString(currency) ? currency->valuestring : "Unknown");
+    /* For dual-listed companies the profile may describe a different listing
+     * than the one quoted (e.g. TSM -> 2330.TW in TWD), and /quote carries no
+     * currency, so only trust the profile currency when its ticker matches.
+     * Otherwise a symbol with no exchange suffix is a US listing (USD); with
+     * a suffix we can't tell, so leave it as "?". */
+    if (cJSON_IsString(ticker) && strcasecmp(ticker->valuestring, symbol) == 0) {
+        snprintf(info->currency, sizeof(info->currency), "%s",
+                 cJSON_IsString(currency) ? currency->valuestring : "?");
+    } else if (!strchr(symbol, '.')) {
+        snprintf(info->currency, sizeof(info->currency), "USD");
+    }
 
     cJSON_Delete(json);
 }
@@ -319,15 +336,25 @@ static void print_stock(const StockInfo *info) {
         ? ((info->price - info->purchase_price) / info->purchase_price) * 100.0
         : 0.0;
 
+    /* Without FX rates, gain/loss is only meaningful when the purchase price
+     * is known to be in the quote currency. */
+    int gain_known = info->purchase_ccy[0] == '\0' ||
+        (strcmp(info->currency, "?") != 0 &&
+         strcasecmp(info->purchase_ccy, info->currency) == 0);
+
     char gain_loss_buf[32];
-    snprintf(gain_loss_buf, sizeof(gain_loss_buf), "%+.2f (%+.2f%%)",
-             gain_loss, gain_loss_percent);
+    if (gain_known) {
+        snprintf(gain_loss_buf, sizeof(gain_loss_buf), "%+.2f (%+.2f%%)",
+                 gain_loss, gain_loss_percent);
+    } else {
+        snprintf(gain_loss_buf, sizeof(gain_loss_buf), "? (%s)", info->purchase_ccy);
+    }
 
     const char *day_color = use_color ? (info->change >= 0 ? COLOR_GREEN : COLOR_RED) : "";
     const char *day_reset = use_color ? COLOR_RESET : "";
 
-    const char *pos_color = use_color ? (info->price >= info->purchase_price ? COLOR_GREEN : COLOR_RED) : "";
-    const char *pos_reset = use_color ? COLOR_RESET : "";
+    const char *pos_color = use_color && gain_known ? (info->price >= info->purchase_price ? COLOR_GREEN : COLOR_RED) : "";
+    const char *pos_reset = use_color && gain_known ? COLOR_RESET : "";
 
     printf("%-35.35s %-10s %-12.2f %s%-20s%s %-12.2f %s%-24s%s %-10s\n",
            info->name,
@@ -345,9 +372,11 @@ static void run_once(const TickerList *tickers, const char *api_key) {
     for (size_t i = 0; i < tickers->count; i++) {
         snprintf(infos[i].name, sizeof(infos[i].name), "Unknown");
         snprintf(infos[i].ticker, sizeof(infos[i].ticker), "%s", tickers->items[i].symbol);
-        snprintf(infos[i].currency, sizeof(infos[i].currency), "Unknown");
+        snprintf(infos[i].currency, sizeof(infos[i].currency), "?");
         infos[i].purchase_price = tickers->items[i].purchase_price;
         infos[i].shares = tickers->items[i].shares;
+        snprintf(infos[i].purchase_ccy, sizeof(infos[i].purchase_ccy), "%s",
+                 tickers->items[i].purchase_ccy);
     }
 
     fetch_all(tickers, api_key, infos);

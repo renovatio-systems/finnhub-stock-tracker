@@ -14,7 +14,10 @@ set(ENABLE_CJSON_TEST OFF CACHE BOOL "" FORCE)
 set(ENABLE_CJSON_UTILS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_AND_STATIC_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+# cJSON declares cmake_minimum_required(VERSION 3.5); CMake 4 warns about < 3.10.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 add_subdirectory(third_party/cJSON EXCLUDE_FROM_ALL)
+unset(CMAKE_POLICY_VERSION_MINIMUM)
 
 # ---- curl (vendored, static, trimmed to what this tool needs) ----
 set(BUILD_CURL_EXE OFF CACHE BOOL "" FORCE)
